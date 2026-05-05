@@ -87,9 +87,24 @@ def update_harbor_password(vcenter_host, vcenter_password, new_password):
         
     current_harbor_pwd = base64.b64decode(b64_pwd).decode('utf-8')
     
+    cmd_harbor_ip = (
+        f'sshpass -p "{sup_pwd}" ssh '
+        f'-o StrictHostKeyChecking=accept-new '
+        f'-o UserKnownHostsFile=/dev/null '
+        f'root@{sup_ip} '
+        f'\'kubectl get svc harbor-nginx -n {namespace} -o jsonpath="{{.status.loadBalancer.ingress[0].ip}}"\' '
+    )
+    res_harbor_ip = subprocess.run(cmd_harbor_ip, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    harbor_ip = res_harbor_ip.stdout.strip()
+    if not harbor_ip:
+        lsf.write_output("Could not determine Harbor LoadBalancer IP.")
+        return
+        
+    lsf.write_output(f"Found Harbor IP: {harbor_ip}")
+    
     # Use Harbor API to change password
     lsf.write_output("Updating Harbor admin password via API...")
-    harbor_api_url = f"https://{sup_ip}/api/v2.0/users/1/password"
+    harbor_api_url = f"https://{harbor_ip}/api/v2.0/users/1/password"
     payload = {
         "old_password": current_harbor_pwd,
         "new_password": new_password
