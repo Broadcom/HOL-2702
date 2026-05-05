@@ -47,8 +47,8 @@ def update_harbor_password(vcenter_host, vcenter_password, new_password):
             lsf.write_output(f"Could not parse Supervisor IP from output:\n{res_vc.stdout}")
             return
             
-    sup_ip = ip_match.group(1) if ip_match else '10.1.1.188'
-    sup_pwd = pwd_match.group(1) if pwd_match else '1mjo-RFJ6M4T~FP5' # Fallback to user provided if regex fails
+    sup_ip = ip_match.group(1)
+    sup_pwd = pwd_match.group(1)
     
     lsf.write_output(f"Retrieved Supervisor IP: {sup_ip}")
     
