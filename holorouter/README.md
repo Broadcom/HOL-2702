@@ -30,6 +30,8 @@ packages.microsoft.com
 q1uk5yfspf.execute-api.us-east-2.amazonaws.com
 cjguvz7527.execute-api.us-west-1.amazonaws.com
 auyrv6ve2i.execute-api.us-west-2.amazonaws.com
+github.com/orgs/tmm-demo-apps/packages/container/package
+ghcr.io/tmm-demo-apps/nginx:latest
 
 # oh-my-posh custom prompt
 ohmyposh.dev
