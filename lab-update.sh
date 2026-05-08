@@ -12,7 +12,16 @@
 . /home/holuser/.bashrc
 # Insert your custom code here:
 
+rm -f /lmchol/home/holuser/Desktop/BuildChecklist.txt
+truncate -s 0 /lmchol/home/holuser/.bash_history
 
 # Example to echo text into file on Console VM. 
 # NOTE: when this script runs, /lmchol is mounted to the "/" of the Console VM
 # echo "Functional Testing!" > /lmchol/home/holuser/Documents/FT.txt
+
+# Create encoded string for the value found in /home/holuser/creds.txt
+export ENCODED_PASS=$(openssl passwd -6 "$(cat /home/holuser/creds.txt)")
+
+# Store this value with the correct indentation in the cloudinit file
+CLOUDINIT_FILE="$(dirname "$0")/files/cloudinit"
+perl -pi -e 's{^(\s*)(lock_passwd: false.*)}{$1$2\n$1passwd: $ENV{ENCODED_PASS}}gm' "$CLOUDINIT_FILE"
