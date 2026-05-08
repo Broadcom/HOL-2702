@@ -13,6 +13,8 @@
 # Insert your custom code here:
 
 rm -f /lmchol/home/holuser/Desktop/BuildChecklist.txt
+ssh root@manager history -c
+history -c
 
 # Example to echo text into file on Console VM. 
 # NOTE: when this script runs, /lmchol is mounted to the "/" of the Console VM
