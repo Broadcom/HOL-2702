@@ -1,0 +1,13 @@
+#cloud-config
+ssh_pwauth: true
+groups:
+  - admingroup: [root,sys]
+users:
+  - name: devops
+    gecos: Dev S. Ops
+    lock_passwd: false
+    passwd: $6$6TAiq24JAIMWDhCz$3Q6RSoBHu1w17nVPy3tjaS.C5/C1DCwD96r3vGgrOowdRlwU3jNP2QdhEUabkTbtVSx8u3GZKCAKNYvqNwZxH/
+    # Password set to Devops123!Devops123!
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo, users, admin
+    shell: /bin/bash
