@@ -12,6 +12,7 @@
 . /home/holuser/.bashrc
 # Insert your custom code here:
 
+rm -f /lmchol/home/holuser/Desktop/BuildChecklist.txt
 
 # Example to echo text into file on Console VM. 
 # NOTE: when this script runs, /lmchol is mounted to the "/" of the Console VM
