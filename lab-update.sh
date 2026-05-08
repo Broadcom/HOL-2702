@@ -23,5 +23,5 @@ truncate -s 0 /lmchol/home/holuser/.bash_history
 export ENCODED_PASS=$(openssl passwd -6 "$(cat /home/holuser/creds.txt)")
 
 # Store this value with the correct indentation in the cloudinit file
-CLOUDINIT_FILE="$(dirname "$0")/files/cloudinit"
-perl -pi -e 's{^(\s*)(lock_passwd: false.*)}{$1$2\n$1passwd: $ENV{ENCODED_PASS}}gm' "$CLOUDINIT_FILE"
+CLOUDINIT_FILE="/lmchol/home/holuser/Documents/files/cloudinit"
+perl -pi -e 's{^(\s*)(lock_passwd: false.*)}{$1$2\n$1passwd: $ENCODED_PASS}gm' "$CLOUDINIT_FILE"
