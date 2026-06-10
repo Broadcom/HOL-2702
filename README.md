@@ -15,6 +15,7 @@
 * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - * - *
 ```
 
+=== Primary benefits of your lab ===
 
 This hands-on lab explores the enhanced capabilities introduced in vSphere Kubernetes Service (VKS), VM Service, Container Service, and Supervisor with VMware Cloud Foundation 9.1. Delivered through four modules, participants learn about the latest improvements in these services and gain practical experience deploying and managing Kubernetes workloads.
 
@@ -22,44 +23,34 @@ Module 1 provides an overview of the new features in VKS, VM Service, Container 
 
 By the end of this lab, participants will have a better understanding of what's new in this space and be able to confidently deploy, configure, and manage Kubernetes clusters, VM's, and containers through a common UI and API on VCF 9.1.
 
-### Featured Product(s)
+=== Featured Product(s) ===
 
-More detail about your lab: Products/Features covered in this lab.
+vSphere Kubernetes Service (VKS)VCF Automation (VCF-A)vSPhere Supervisor Service
 
-* vSphere Kubernetes Service (VKS)
-* VCF Automation (VCF-A)
-* vSPhere Supervisor Service
+=== All Modules ===
 
+All acccounts use the standard Hands-on Labs password.
 
-## Modules
+vCenter Operations Manager Instances: User name: admin
 
-Please record account names for this lab. All acccounts use the standard Hands-on Labs password.
+For vCenter Server Administration Console: User name: root
 
-### === Module 1 ===
+For the vSphere Client, use: User name: administrator@vsphere.local
 
-Credentials for all vCenter Operations Manager Instances:
-User name: admin
+For the ESX Host Client, use: User name: root
 
-For vCenter Server Administration Console:
-User name: root
+For the NSX Console, use: User name: admin
 
-For the vSphere Client, use:
-User name: administrator@vsphere.local
+=== Lab Authors ===
 
-### === Module 2 ===
+== Principals ==
 
+Kevin Brady
 
+== Captains ==
 
-## Lab Authors
+Randy Carson Michael Fleisher Doug FioreJohnny Jagroo Ernest Nichols
 
-Principal - Kevin Brady Global Partner Solution Architect
-
-### Captain(s)
-
-Captain: Randy Carson Technical Account Manager
-Captain: Michael Fleisher Senior Staff Solutions Architect
-Doug Fiore : Staff Solutions Architect
-Ernest Nichols: Client Solutions Consultant
-Johnny Jagroo - Partner Staff Solutions Architect
+Thank you for taking our 2701-02 - Hands-On with Kubernetes: Essential Updates and Capabilities in VCF 9.1 lab ! Please consider taking some of our other labs to get familiar with more of our solutions.
 
 
