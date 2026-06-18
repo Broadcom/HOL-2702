@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 # lab-update.py - Harbor admin password reset for HOL-2702
-# Version 1.2 - 2026-05-14
+# Version 1.3 - 2026-06-18
 # Retrieves Harbor's current admin password from the Supervisor cluster secret,
 # waits for Harbor to be healthy, then resets it to the lab standard password.
+#
+# v1.3: Added cold-boot awareness:
+#   - Phase 0 pre-wait for harbor-database-0 to be scheduled (vSphere Pod infra
+#     can take ~20 min after cold boot before pods are created).
+#   - Zombie pod cleanup (PodVMAnnotationsMissing/Failed pods from prior cycles
+#     block kubectl rollout status and accumulate across reboots).
 
 import subprocess
 import sys
@@ -28,6 +34,11 @@ except ImportError:
             print(msg)
 
 
+# After cold boot, vSphere Pod infrastructure takes ~20 min to schedule pods.
+# Allow 25 min so the rollout-status phase (10 min per workload) starts only
+# once pods actually exist.
+COLD_BOOT_WAIT_TIMEOUT = 1500
+
 HARBOR_WORKLOADS = [
     ("sts",        "harbor-database"),
     ("sts",        "harbor-redis"),
@@ -40,23 +51,123 @@ HARBOR_WORKLOADS = [
 ]
 
 
+def _run_sup(sup_ip, sup_pwd, kubectl_cmd, timeout=60):
+    """Run a kubectl command on the Supervisor via SSH. Returns (returncode, stdout, stderr)."""
+    cmd = (
+        f'sshpass -p "{sup_pwd}" ssh '
+        f'-o StrictHostKeyChecking=accept-new '
+        f'-o UserKnownHostsFile=/dev/null '
+        f'root@{sup_ip} '
+        f'"{kubectl_cmd}"'
+    )
+    result = subprocess.run(
+        cmd, shell=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+
+def cleanup_zombie_pods(namespace, sup_ip, sup_pwd):
+    """
+    Delete Failed/PodVMAnnotationsMissing pods that persist across reboots.
+    These pods accumulate when the vSphere Pod VM loses its annotations after
+    ungraceful shutdown or upgrade. They are terminal and never self-heal, but
+    they can block kubectl rollout status for deployments that share a ReplicaSet
+    with the zombie pods.
+    """
+    lsf.write_output("  Cleaning up zombie pods (PodVMAnnotationsMissing/Failed)...")
+    rc, stdout, stderr = _run_sup(
+        sup_ip, sup_pwd,
+        f"kubectl delete pods -n {namespace} --field-selector=status.phase!=Running --grace-period=0 2>&1",
+        timeout=60,
+    )
+    if stdout:
+        for line in stdout.splitlines():
+            lsf.write_output(f"    {line}")
+    else:
+        lsf.write_output("    No zombie pods found.")
+
+
+def wait_for_primary_pod(namespace, sup_ip, sup_pwd):
+    """
+    Phase 0: Wait until harbor-database-0 is Running before starting rollout checks.
+
+    After a cold boot, the vSphere Pod scheduling infrastructure (ESXi hosts +
+    vSphere Pod runtime) may not be ready to create pods for 15-25 minutes.
+    kubectl rollout status will time out if called before pods are even created.
+    This pre-wait gates the rollout check on the slowest pod (harbor-database-0,
+    which also has the largest storage dependency) to ensure pod scheduling is
+    ready before per-workload rollout timeouts begin.
+    """
+    lsf.write_output(
+        f"Phase 0: Waiting for harbor-database-0 to be Running after cold boot "
+        f"(up to {COLD_BOOT_WAIT_TIMEOUT // 60}m)..."
+    )
+    deadline = time.time() + COLD_BOOT_WAIT_TIMEOUT
+    interval = 30
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        rc, phase, _ = _run_sup(
+            sup_ip, sup_pwd,
+            f"kubectl get pod harbor-database-0 -n {namespace} "
+            f"--no-headers -o custom-columns=STATUS:.status.phase 2>/dev/null",
+            timeout=30,
+        )
+        remaining = max(0, int(deadline - time.time()))
+        if phase == "Running":
+            lsf.write_output(f"  harbor-database-0 is Running (attempt {attempt}).")
+            return True
+        elif phase:
+            lsf.write_output(
+                f"  harbor-database-0 phase: {phase} — waiting... ({remaining}s remaining)"
+            )
+        else:
+            lsf.write_output(
+                f"  harbor-database-0 not yet scheduled (attempt {attempt}, {remaining}s remaining)"
+            )
+        if time.time() < deadline:
+            time.sleep(interval)
+
+    lsf.write_output(
+        f"Phase 0 timed out: harbor-database-0 did not reach Running state "
+        f"within {COLD_BOOT_WAIT_TIMEOUT // 60} minutes."
+    )
+    return False
+
+
 def wait_for_harbor(harbor_ip, sup_ip, sup_pwd, namespace, timeout_seconds=600, interval=15):
     """
-    Two-phase Harbor readiness check.
+    Three-phase Harbor readiness check.
+
+    Phase 0 — Cold-boot pod wait: wait until harbor-database-0 is Running before
+    attempting rollout status checks. vSphere Pod infrastructure can take ~20
+    minutes to schedule pods after a cold boot; without this pre-wait the rollout
+    status check times out before pods are even created. Also cleans up zombie
+    PodVMAnnotationsMissing pods that accumulate across reboots.
 
     Phase 1 — kubectl rollout status: SSH into the Supervisor and wait for every
-    Harbor Deployment and StatefulSet to report fully rolled out. This is the
-    authoritative signal that pods are Running and Ready, regardless of how long
-    the database or other components take to initialise.
+    Harbor Deployment and StatefulSet to report fully rolled out.
 
     Phase 2 — HTTP health endpoint: once all pods are Ready, poll the Harbor
     health API to confirm the LoadBalancer is forwarding traffic and all internal
     Harbor components report healthy.
 
-    Returns True when both phases pass, False if either times out.
+    Returns True when all phases pass, False if any phase times out.
     """
+    # --- Pre-work: clean up zombie pods from previous boot cycles ---
+    cleanup_zombie_pods(namespace, sup_ip, sup_pwd)
+
+    # --- Phase 0: wait for primary pod to be scheduled (cold-boot gate) ---
+    if not wait_for_primary_pod(namespace, sup_ip, sup_pwd):
+        return False
+
     # --- Phase 1: Kubernetes workload readiness ---
-    lsf.write_output(f"Phase 1: Waiting for Harbor workloads to be Ready in namespace '{namespace}' (timeout {timeout_seconds}s)...")
+    lsf.write_output(
+        f"Phase 1: Waiting for Harbor workloads to be Ready in namespace "
+        f"'{namespace}' (timeout {timeout_seconds}s)..."
+    )
     for kind, name in HARBOR_WORKLOADS:
         lsf.write_output(f"  Waiting for {kind}/{name}...")
         cmd = (
@@ -169,7 +280,10 @@ def update_harbor_password(vcenter_host, vcenter_password, new_password):
     lsf.write_output(f"Found Harbor IP: {harbor_ip}")
 
     # Wait for Harbor to be fully healthy before attempting any API calls
-    lsf.write_output(f"Waiting for Harbor at {harbor_ip} to become healthy (kubectl + HTTP, up to 10 minutes)...")
+    lsf.write_output(
+        f"Waiting for Harbor at {harbor_ip} to become healthy "
+        f"(cold-boot pod wait + kubectl + HTTP, up to 35 minutes)..."
+    )
     if not wait_for_harbor(harbor_ip, sup_ip, sup_pwd, namespace, timeout_seconds=600, interval=15):
         lsf.write_output(f"Harbor at {harbor_ip} did not become healthy within the timeout. Failing lab.")
         sys.exit(1)
