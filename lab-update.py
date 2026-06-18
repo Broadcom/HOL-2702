@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # lab-update.py - Harbor admin password reset for HOL-2702
-# Version 1.3 - 2026-06-18
+# Version 1.4 - 2026-06-18
 # Retrieves Harbor's current admin password from the Supervisor cluster secret,
 # waits for Harbor to be healthy, then resets it to the lab standard password.
+# Also ensures Harbor's TLS certificate is signed by the lab's Vault PKI CA.
 #
 # v1.3: Added cold-boot awareness:
 #   - Phase 0 pre-wait for harbor-database-0 to be scheduled (vSphere Pod infra
 #     can take ~20 min after cold boot before pods are created).
 #   - Zombie pod cleanup (PodVMAnnotationsMissing/Failed pods from prior cycles
 #     block kubectl rollout status and accumulate across reboots).
+# v1.4: Harbor cert refresh:
+#   - Calls harbor_cert_refresh.py after password update to ensure harbor-tls is
+#     signed by the vcf.lab Vault root CA with harbor-01a.site-a.vcf.lab SAN.
 
 import subprocess
 import sys
@@ -342,6 +346,31 @@ def update_harbor_password(vcenter_host, vcenter_password, new_password):
         sys.exit(1)
 
 
+def ensure_harbor_vault_cert():
+    """Ensure Harbor's TLS certificate is signed by the lab Vault root CA.
+
+    Imports harbor_cert_refresh from the same Tools directory and calls
+    refresh_harbor_cert().  Failures are logged but do not abort the overall
+    lab startup — a self-signed cert is still functional for most lab tasks.
+    """
+    lsf.write_output("Checking Harbor TLS certificate (Vault CA requirement)...")
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "harbor_cert_refresh",
+            "/home/holuser/hol/Tools/harbor_cert_refresh.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        ok = mod.refresh_harbor_cert()
+        if ok:
+            lsf.write_output("Harbor TLS certificate is from Vault root CA.")
+        else:
+            lsf.write_output("WARNING: Harbor TLS cert refresh did not complete. Lab continues.")
+    except Exception as e:
+        lsf.write_output(f"WARNING: Harbor TLS cert check failed ({e}). Lab continues.")
+
+
 def main():
     creds_file = '/home/holuser/creds.txt'
     password = ''
@@ -352,6 +381,9 @@ def main():
     vcenter_host = 'vc-wld01-a.site-a.vcf.lab'
     # The vCenter password and the desired Harbor admin password are both the lab standard password.
     update_harbor_password(vcenter_host, password, password)
+
+    # Ensure Harbor TLS cert is from the lab Vault root CA
+    ensure_harbor_vault_cert()
 
 
 if __name__ == "__main__":
