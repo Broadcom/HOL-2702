@@ -266,23 +266,17 @@ def main(lsf=None, standalone=False, dry_run=False):
         
         # Connect to vCenters or ESXi hosts if sessions are not established
         if not lsf.sis:
-            vcenters = lsf.get_config_list('RESOURCES', 'vCenters')
-            if not vcenters:
-                vcenters = lsf.get_config_list('vCenter', 'vcenters')
-            if vcenters:
-                lsf.connect_vcenters(vcenters)
-            else:
-                esx_entries = lsf.get_config_list('RESOURCES', 'ESXiHosts')
-                if not esx_entries:
-                    esx_entries = lsf.get_config_list('VCF', 'vcfmgmtcluster')
-                
-                formatted_hosts = []
-                for entry in esx_entries:
-                    host_name = entry.split(':')[0].strip()
-                    if host_name:
-                        formatted_hosts.append(f'{host_name}:esx:root')
-                if formatted_hosts:
-                    lsf.connect_vcenters(formatted_hosts)
+            esx_entries = lsf.get_config_list('RESOURCES', 'ESXiHosts')
+            if not esx_entries:
+                esx_entries = lsf.get_config_list('VCF', 'vcfmgmtcluster')
+            
+            formatted_hosts = []
+            for entry in esx_entries:
+                host_name = entry.split(':')[0].strip()
+                if host_name:
+                    formatted_hosts.append(f'{host_name}:esx:root')
+            if formatted_hosts:
+                lsf.connect_vcenters(formatted_hosts)
         
         if not lsf.sis:
             lsf.write_output('WARNING: No vCenter or ESXi connections available to check VCF Automation VM')
